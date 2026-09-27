@@ -46,6 +46,10 @@ Authenticated live testing was not available. The following remain unverified:
 
 This project does not claim to suppress unverified surfaces. If JanitorAI changes its markup, please include the affected page and current DOM structure in a bug report.
 
+## Development model
+
+This project is “2D-printed”: I specify the behavior, AI workers fabricate the implementation, and I test, inspect, refine, and iterate the result.
+
 ## License
 
 [MIT](LICENSE)
