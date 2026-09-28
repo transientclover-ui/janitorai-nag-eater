@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         JanitorAI Nag Eater
 // @namespace    https://github.com/transientclover-ui/janitorai-nag-eater
-// @version      0.1.0
+// @version      0.1.1
 // @description  Hides JanitorAI Plus subscription promotional popups.
 // @author       JanitorAI Nag Eater contributors
 // @license      MIT
 // @match        https://janitorai.com/*
 // @run-at       document-start
-// @grant        none
+// @grant        GM_registerMenuCommand
 // ==/UserScript==
 
 (() => {
@@ -17,6 +17,8 @@
     '[data-modal-open="true"][class*="_plusSurface_"]';
   const MODAL_OVERLAY_SELECTOR = '[class*="_modalOverlay_"]';
   const SUPPRESSED_ATTRIBUTE = 'data-jne-plus-promotion';
+  const suppressedSurfaces = new WeakSet();
+  let suppressedCount = 0;
 
   const style = document.createElement('style');
   style.textContent = `
@@ -29,6 +31,11 @@
   (document.head || document.documentElement).append(style);
 
   function suppressSurface(surface) {
+    if (!suppressedSurfaces.has(surface)) {
+      suppressedSurfaces.add(surface);
+      suppressedCount += 1;
+    }
+
     const overlay = surface.closest(MODAL_OVERLAY_SELECTOR);
     if (!overlay) {
       return;
@@ -52,6 +59,13 @@
       suppressSurface(surface);
     }
   }
+
+  GM_registerMenuCommand('Show suppressed promotion count', () => {
+    const noun = suppressedCount === 1 ? 'element' : 'elements';
+    alert(
+      `JanitorAI Nag Eater suppressed ${suppressedCount} promotional ${noun} on this page.`,
+    );
+  });
 
   scan(document.documentElement);
 

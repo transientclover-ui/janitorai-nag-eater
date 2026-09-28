@@ -22,6 +22,8 @@ The launch promotion can appear after a remotely configured dwell time and is re
 
 The userscript installs targeted CSS at `document-start`. A small `MutationObserver` handles browsers without usable `:has()` support by marking only an overlay that contains the confirmed Plus surface. The observer also covers delayed rendering and client-side navigation.
 
+Use the userscript manager's **Show suppressed promotion count** menu command to see how many targeted Plus surfaces have been suppressed during the current page session. Repeated observation of the same surface is counted only once.
+
 The script does not:
 
 - hide elements merely because they contain the word "Plus"
@@ -49,6 +51,8 @@ This project does not claim to suppress unverified surfaces. If JanitorAI change
 ## Development model
 
 This project is “2D-printed”: I specify the behavior, AI workers fabricate the implementation, and I test, inspect, refine, and iterate the result.
+
+Run the minimal Node.js test suite with `npm test`.
 
 ## License
 

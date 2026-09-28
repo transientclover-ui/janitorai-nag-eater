@@ -4,4 +4,6 @@ Hides JanitorAI Plus subscription promotional popups without clicking buttons, c
 
 The script uses early, narrowly targeted CSS and a small dynamic-rendering fallback. It has no telemetry, external dependencies, or settings.
 
+The userscript manager menu includes a command that reports how many targeted Plus surfaces have been suppressed during the current page session.
+
 Authenticated chat behavior and differences between free and paid accounts have not been verified.
