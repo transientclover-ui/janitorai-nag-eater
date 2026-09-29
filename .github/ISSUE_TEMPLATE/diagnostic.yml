@@ -1,0 +1,31 @@
+name: Experimental diagnostic capture
+description: Share manually reviewed, redacted structural evidence for unwanted UI.
+title: '[Diagnostic] '
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is evidence collection for the separate EXPERIMENTAL DIAGNOSTIC, not a promise of suppression. Review the JSON before posting publicly. Do not include raw HTML, private messages, account details, or full URLs.
+  - type: checkboxes
+    attributes:
+      label: Privacy review
+      options:
+        - label: I inspected the diagnostic and removed anything I do not want public.
+          required: true
+  - type: textarea
+    attributes:
+      label: What UI did you select?
+      description: Describe the unwanted card and coarse page type (chat/home/character/other). No private text or full URLs.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Reviewed diagnostic JSON
+      description: Paste the output from the separate diagnostic userscript after reviewing it.
+      render: json
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Browser and userscript manager
+      placeholder: e.g. Firefox / Violentmonkey

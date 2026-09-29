@@ -39,6 +39,12 @@ The script does not:
 
 App-banner suppression remains unimplemented in v0.2.2. The v0.2.0 CSS accidentally emitted global tag selectors that hid ordinary page content. v0.2.1 restored the Plus-only behavior from commit `b94652f`. The reported “Continue this chat in the app / Get the app” card still has no verified live DOM; no selector or suppression rule is provided for it.
 
+## Experimental diagnostic (optional, GitHub only)
+
+To help investigate the unverified app card or other unwanted UI, use the separate [EXPERIMENTAL DIAGNOSTIC userscript](https://raw.githubusercontent.com/transientclover-ui/janitorai-nag-eater/main/experimental/nag-eater-diagnostic.user.js). It provides a manual element picker and a redacted structural report for local review/copying. It does not suppress UI, upload anything, or replace stable Nag Eater v0.2.2. No Greasy Fork publication is involved.
+
+See [install, capture, privacy and limitations](docs/experimental-diagnostic.md). Review every report before sharing it through the [diagnostic issue form](https://github.com/transientclover-ui/janitorai-nag-eater/issues/new?template=diagnostic.yml). Participation is optional; missing captures are not a blocker for stable Nag Eater.
+
 ## Verification and limitations
 
 The complete 12-test Chromium suite covers ordinary UI and errors, chat input/buttons and navigation, early Plus CSS, delayed/recreated surfaces, unique counts, attribute-only opening, reversible overlay reuse, and the marker-only fallback with the `:has()` rule removed. Node-identity and DOM-mutation assertions verify that suppression retains children, unsaved input state and event listeners, and permits subsequent removal by the owning renderer. These are browser DOM lifecycle fixtures, not an authenticated React/JanitorAI integration test.
