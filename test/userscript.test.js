@@ -1,245 +1,96 @@
 const { readFileSync } = require('node:fs');
-const assert = require('node:assert/strict');
-const { test } = require('node:test');
-const vm = require('node:vm');
+const { test, expect } = require('@playwright/test');
 
-const userscript = readFileSync('janitorai-nag-eater.user.js', 'utf8');
+const source = readFileSync(process.env.USERSCRIPT_PATH || 'janitorai-nag-eater.user.js', 'utf8');
+const ui = `<main><div id="chat"><h1>Chat</h1><h2>Messages</h2><h3>Today</h3>
+<p>Continue this chat in the app</p><span>Get the app</span><a href="#chat">History</a>
+<ul><li>Message</li></ul><textarea aria-label="Message"></textarea>
+<button onclick="this.textContent='Sent'">Send</button></div>
+<div role="dialog" id="ordinary">Ordinary dialog</div>
+<div class="_modalOverlay_normal" id="ordinary-overlay">Ordinary overlay</div>
+<div class="_plusSurface_closed" data-modal-open="false" id="closed">Closed surface content</div>
+<div class="_appPromotionContainer_test" id="unverified">Get the app<button>Download</button></div>
+<div class="bentoAppPromotionBanner_test" id="unverified2">Continue this chat in the app</div>
+<div class="bentoAppBanner_test" id="unverified3">Get the app</div></main>`;
+const promo = '<div id="promo" class="_modalOverlay_test"><div class="_plusSurface_test" data-modal-open="true">Plus promotion</div></div>';
 
-class TextNode {
-  constructor(text) {
-    this.textContent = text;
-    this.parentElement = null;
-  }
-  get childNodes() {
-    return [];
-  }
-}
-
-class Element {
-  constructor({ surface = false, overlay = null, descendants = [], appBanner = false, textContent = '' } = {}) {
-    this.surface = surface;
-    this.overlay = overlay;
-    this.descendants = descendants;
-    this.appBanner = appBanner;
-    this.attributes = new Map();
-    this.childNodes = [];
-    this.textContent = textContent;
-  }
-
-  append() {}
-
-  closest(selector) {
-    return this.overlay;
-  }
-
-  matches(selector) {
-    if (this.appBanner) {
-      return true;
-    }
-    return this.surface;
-  }
-
-  querySelectorAll(selector) {
-    const results = [];
-    const collect = (node) => {
-      if (node.appBanner) {
-        results.push(node);
-      }
-      for (const child of node.childNodes) {
-        collect(child);
-      }
-    };
-    for (const child of this.childNodes) {
-      collect(child);
-    }
-    return results;
-  }
-
-  querySelector(selector) {
-    const all = this.querySelectorAll(selector);
-    return all[0] || null;
-  }
-
-  setAttribute(name, value) {
-    this.attributes.set(name, value);
-  }
-}
-
-class TreeWalker {
-  constructor(root, whatToShow, filter) {
-    this._nodes = [];
-    this._index = 0;
-    this._collect(root);
-  }
-
-  _collect(node) {
-    if (this._matches(node)) {
-      this._nodes.push(node);
-    }
-    if (node.childNodes && typeof node.childNodes[Symbol.iterator] === 'function') {
-      for (const child of node.childNodes) {
-        this._collect(child);
-      }
-    }
-  }
-
-  _matches(node) {
-    return node.textContent !== undefined;
-  }
-
-  nextNode() {
-    if (this._index >= this._nodes.length) {
-      return null;
-    }
-    const node = this._nodes[this._index];
-    this._index += 1;
-    return node;
-  }
-}
-
-let capturedObserverCallback = null;
-
-class MutationObserver {
-  constructor(callback) {
-    capturedObserverCallback = callback;
-  }
-
-  observe() {}
-}
-
-function makeContext({ surfaces = [], appBannerContainers = [], textNodes = [] } = {}) {
-  capturedObserverCallback = null;
-
-  const documentElement = new Element({
-    descendants: surfaces,
-    childNodes: appBannerContainers,
+async function install(page) {
+  await page.evaluate(() => {
+    window.alerts = [];
+    window.alert = message => window.alerts.push(message);
+    window.GM_registerMenuCommand = (name, callback) => { window.menu = { name, callback }; };
   });
-
-  textNodes.forEach((tn) => {
-    tn.parentElement = documentElement;
-    documentElement.childNodes.push(tn);
-  });
-
-  const context = {
-    Element,
-    TextNode,
-    TreeWalker,
-    NodeFilter: { SHOW_TEXT: 4 },
-    MutationObserver,
-    alert: (message) => {
-      if (!context._alerts) {
-        context._alerts = [];
-      }
-      context._alerts.push(message);
-    },
-    document: {
-      createElement: () => ({ textContent: '', append: () => {} }),
-      documentElement,
-      head: documentElement,
-      createTreeWalker: (root, whatToShow, filter) => new TreeWalker(root, whatToShow, filter),
-    },
-    GM_registerMenuCommand: (name, callback) => {
-      context._menuCommand = { name, callback };
-    },
-  };
-
-  return context;
+  await page.addScriptTag({ content: source });
 }
 
-function run({ surfaces = [], appBannerContainers = [], textNodes = [] } = {}) {
-  const context = makeContext({ surfaces, appBannerContainers, textNodes });
-
-  context._alerts = [];
-  context._menuCommand = null;
-
-  vm.runInNewContext(userscript, context);
-
-  return {
-    alerts: context._alerts || [],
-    menuCommand: context._menuCommand,
-    mutationCallback: capturedObserverCallback,
-    Element,
-    TextNode,
-    documentElement: context.document.documentElement,
-  };
+async function assertUsable(page) {
+  for (const selector of ['#chat', '#chat h1', '#chat h2', '#chat h3', '#chat p', '#chat span', '#chat a', '#chat li', '#chat button', '#ordinary', '#ordinary-overlay', '#closed', '#unverified', '#unverified2', '#unverified3']) {
+    await expect(page.locator(selector)).toBeVisible();
+    expect(await page.locator(selector).evaluate(el => Boolean(el.closest('[inert], [aria-hidden="true"]')))).toBe(false);
+  }
+  await page.getByRole('textbox', {name:'Message'}).fill('A normal chat message');
+  await page.getByRole('button', {name:'Send', exact:true}).click();
+  await expect(page.getByRole('button', {name:'Sent', exact:true})).toBeVisible();
 }
 
-test('counts each targeted promotional surface once', () => {
-  const overlay = new Element();
-  const surface = new Element({ surface: true, overlay });
-
-  const setup = run({ surfaces: [surface, surface] });
-  setup.mutationCallback([{ addedNodes: [surface, surface] }]);
-  setup.menuCommand.callback();
-
-  assert.equal(
-    setup.alerts[0],
-    'JanitorAI Nag Eater suppressed 1 promotional Plus element and 0 app-promotion banner elements on this page.',
-  );
+test('regression: ordinary UI and chat remain visible and interactive without a banner', async ({page}) => {
+  await page.setContent(ui.replace(/<div class="(?:_appPromotionContainer_|bentoApp)[\s\S]*?<\/main>/, '</main>'));
+  await install(page);
+  for (const selector of ['#chat', '#chat h2', '#chat h3', '#chat p', '#chat span', '#chat a', '#chat li', '#chat button']) {
+    await expect(page.locator(selector)).toBeVisible();
+  }
+  await page.getByRole('textbox').fill('Hello');
+  await page.getByRole('button', {name:'Send'}).click();
+  await expect(page.getByRole('button', {name:'Sent'})).toBeVisible();
 });
 
-test('menu command displays the current page count', () => {
-  const setup = run();
-
-  setup.menuCommand.callback();
-
-  assert.equal(setup.menuCommand.name, 'Show suppressed promotion count');
-  assert.equal(
-    setup.alerts[0],
-    'JanitorAI Nag Eater suppressed 0 promotional Plus elements and 0 app-promotion banner elements on this page.',
-  );
+test('preserves legitimate containers, dialogs, and unverified app banners', async ({page}) => {
+  await page.setContent(ui + promo);
+  await install(page);
+  await assertUsable(page);
+  await expect(page.locator('#promo')).toBeHidden();
 });
 
-test('removes app-promotion banner container with app CTA text', () => {
-  const textNode = new TextNode('Pick up right where you are');
-  const banner = new Element({ appBanner: true });
-  banner.childNodes = [textNode];
-  textNode.parentElement = banner;
-
-  const setup = run({ appBannerContainers: [banner] });
-  setup.mutationCallback([{ addedNodes: [banner] }]);
-
-  assert.equal(setup.alerts.length, 0);
+test('early CSS hides only confirmed Plus surfaces before observer runs', async ({page}) => {
+  await page.setContent(ui);
+  await install(page);
+  const displays = await page.evaluate(markup => {
+    document.body.insertAdjacentHTML('beforeend', markup);
+    return ['#promo', '#promo > div', '#chat'].map(s => getComputedStyle(document.querySelector(s)).display);
+  }, promo);
+  expect(displays.slice(0,2)).toEqual(['none', 'none']);
+  expect(displays[2]).not.toBe('none');
 });
 
-test('does not remove chat content that mentions app phrase', () => {
-  const textNode = new TextNode('the last message was get the app but this is chat');
-  const chatElement = new Element({ appBanner: false });
-  chatElement.childNodes = [textNode];
-  textNode.parentElement = chatElement;
-
-  const setup = run({ appBannerContainers: [chatElement] });
-  setup.mutationCallback([{ addedNodes: [chatElement] }]);
-
-  assert.equal(setup.alerts.length, 0);
+test('handles delayed insertion, navigation, and counts each Plus surface once', async ({page}) => {
+  await page.setContent(ui);
+  await install(page);
+  await page.evaluate(() => window.menu.callback());
+  expect(await page.evaluate(() => window.alerts[0])).toBe('JanitorAI Nag Eater suppressed 0 promotional elements on this page.');
+  for (let i = 0; i < 2; i++) {
+    await page.evaluate(markup => { document.querySelector('#promo')?.remove(); document.body.insertAdjacentHTML('beforeend', markup); }, promo);
+    await expect(page.locator('#promo')).toHaveAttribute('data-jne-plus-promotion', '');
+    await expect(page.locator('#promo')).toHaveAttribute('aria-hidden', 'true');
+    expect(await page.locator('#promo').evaluate(el => el.inert)).toBe(true);
+  }
+  await page.evaluate(() => { const surface = document.querySelector('#promo > div'); surface.remove(); document.querySelector('#promo').append(surface); });
+  await page.evaluate(() => window.menu.callback());
+  expect(await page.evaluate(() => window.alerts.at(-1))).toBe('JanitorAI Nag Eater suppressed 2 promotional elements on this page.');
+  await assertUsable(page);
 });
 
-test('app banner detection requires both app-cta text and app-store context', () => {
-  const textNode = new TextNode('get the app');
-  const container = new Element({ appBanner: true });
-  container.childNodes = [textNode];
-  textNode.parentElement = container;
-
-  const setup = run({ appBannerContainers: [container] });
-  setup.mutationCallback([{ addedNodes: [container] }]);
-
-  assert.equal(setup.alerts.length, 0);
+test('observer handles a directly inserted surface and singular count', async ({page}) => {
+  await page.setContent('<div class="_modalOverlay_test" id="promo"></div>');
+  await install(page);
+  await page.locator('#promo').evaluate(el => { el.innerHTML = '<div class="_plusSurface_test" data-modal-open="true">Plus</div>'; });
+  await expect(page.locator('#promo')).toHaveAttribute('data-jne-plus-promotion', '');
+  await page.evaluate(() => window.menu.callback());
+  expect(await page.evaluate(() => window.menu.name)).toBe('Show suppressed promotion count');
+  expect(await page.evaluate(() => window.alerts[0])).toBe('JanitorAI Nag Eater suppressed 1 promotional element on this page.');
 });
 
-test('multiple banner containers handled correctly', () => {
-  const textNode1 = new TextNode('get the app download now');
-  const banner1 = new Element({ appBanner: true });
-  banner1.childNodes = [textNode1];
-  textNode1.parentElement = banner1;
-
-  const textNode2 = new TextNode('continue this chat in the app');
-  const banner2 = new Element({ appBanner: true });
-  banner2.childNodes = [textNode2];
-  textNode2.parentElement = banner2;
-
-  const setup = run({ appBannerContainers: [banner1, banner2] });
-  setup.mutationCallback([{ addedNodes: [banner1] }, { addedNodes: [banner2] }]);
-  setup.menuCommand.callback();
-
-  assert.ok(setup.alerts[0].includes('2 app-promotion banner elements'), setup.alerts[0]);
+test('document-start installation preserves later chat rendering', async ({page}) => {
+  await install(page);
+  await page.evaluate(html => { document.body.innerHTML = html; }, ui);
+  await assertUsable(page);
 });

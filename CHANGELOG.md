@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1] - 2026-09-28
+
+### Fixed
+
+- Fixed v0.2.0 hiding ordinary JanitorAI UI and chat content: concatenating comma-separated container and text selector lists emitted bare `h2`, `h3`, `p`, `div`, `span`, `a`, `button`, and `li` selectors with `display: none !important`.
+- Removed the unverified app-banner suppression, restoring the pre-regression Plus-only implementation and its suppression-count menu. App banners remain visible pending safe live verification.
+
+### Testing
+
+- Replaced selector-agnostic DOM mocks with six Chromium browser tests covering actual visibility, chat input/button interaction, early CSS, delayed/recreated Plus surfaces, counts, and preservation of unrelated UI and app-banner containers.
+- The visibility regression test fails against released v0.2.0 and passes against this patch.
+- Live JanitorAI testing was blocked by the browser environment's site-safety policy; authenticated chat behavior remains unverified.
+
 ## [0.2.0] - 2026-09-28
 
 ### Added
