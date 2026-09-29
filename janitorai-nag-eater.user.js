@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         JanitorAI Nag Eater
 // @namespace    https://github.com/transientclover-ui/janitorai-nag-eater
-// @version      0.2.1
+// @version      0.2.2
 // @description  Hides JanitorAI Plus subscription promotional popups.
 // @author       JanitorAI Nag Eater contributors
 // @license      MIT
@@ -19,44 +19,50 @@
   const SUPPRESSED_ATTRIBUTE = 'data-jne-plus-promotion';
   const suppressedSurfaces = new WeakSet();
   let suppressedCount = 0;
+  const markedOverlays = new Set();
 
   const style = document.createElement('style');
+  // Keep :has() separate: unsupported selectors must not invalidate the
+  // surface rule or the observer fallback.
   style.textContent = `
     ${PLUS_SURFACE_SELECTOR},
-    ${MODAL_OVERLAY_SELECTOR}:has(${PLUS_SURFACE_SELECTOR}),
-    [${SUPPRESSED_ATTRIBUTE}] {
+    ${MODAL_OVERLAY_SELECTOR}[${SUPPRESSED_ATTRIBUTE}] {
+      display: none !important;
+    }
+    ${MODAL_OVERLAY_SELECTOR}:has(${PLUS_SURFACE_SELECTOR}) {
       display: none !important;
     }
   `;
   (document.head || document.documentElement).append(style);
 
-  function suppressSurface(surface) {
-    if (!suppressedSurfaces.has(surface)) {
-      suppressedSurfaces.add(surface);
-      suppressedCount += 1;
+  function reconcile() {
+    const activeOverlays = new Set();
+    for (const surface of document.querySelectorAll(PLUS_SURFACE_SELECTOR)) {
+      if (!suppressedSurfaces.has(surface)) {
+        suppressedSurfaces.add(surface);
+        suppressedCount += 1;
+      }
+      // Match the CSS ancestry rule, including nested overlays.
+      for (let parent = surface.parentElement; parent; parent = parent.parentElement) {
+        if (parent.matches(MODAL_OVERLAY_SELECTOR)) {
+          activeOverlays.add(parent);
+        }
+      }
     }
 
-    const overlay = surface.closest(MODAL_OVERLAY_SELECTOR);
-    if (!overlay) {
-      return;
+    // React may close, move, or replace the promotion and reuse its overlay.
+    // Only our marker is owned by us; leave nodes, aria-hidden and inert alone.
+    for (const overlay of markedOverlays) {
+      if (!activeOverlays.has(overlay)) {
+        overlay.removeAttribute(SUPPRESSED_ATTRIBUTE);
+        markedOverlays.delete(overlay);
+      }
     }
-
-    overlay.setAttribute(SUPPRESSED_ATTRIBUTE, '');
-    overlay.setAttribute('aria-hidden', 'true');
-    overlay.inert = true;
-  }
-
-  function scan(root) {
-    if (!(root instanceof Element)) {
-      return;
-    }
-
-    if (root.matches(PLUS_SURFACE_SELECTOR)) {
-      suppressSurface(root);
-    }
-
-    for (const surface of root.querySelectorAll(PLUS_SURFACE_SELECTOR)) {
-      suppressSurface(surface);
+    for (const overlay of activeOverlays) {
+      if (!overlay.hasAttribute(SUPPRESSED_ATTRIBUTE)) {
+        overlay.setAttribute(SUPPRESSED_ATTRIBUTE, '');
+      }
+      markedOverlays.add(overlay);
     }
   }
 
@@ -67,18 +73,15 @@
     );
   });
 
-  scan(document.documentElement);
+  reconcile();
 
-  const observer = new MutationObserver((mutations) => {
-    for (const mutation of mutations) {
-      for (const node of mutation.addedNodes) {
-        scan(node);
-      }
-    }
-  });
-
+  // One reconciliation per mutation batch. Our marker is not observed, so
+  // suppression cannot trigger an observer feedback loop.
+  const observer = new MutationObserver(reconcile);
   observer.observe(document.documentElement, {
     childList: true,
     subtree: true,
+    attributes: true,
+    attributeFilter: ['class', 'data-modal-open'],
   });
 })();

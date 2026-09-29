@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.2] - 2026-09-28
+
+### Fixed
+
+- Made the existing Plus-only CSS suppression reversible: release overlay markers when the target closes, moves, disappears, or changes class.
+- Preserve site-owned nodes, children, state, event listeners, and accessibility attributes; no longer set persistent `aria-hidden` or `inert` on overlays.
+- Separate the `:has()` CSS rule from the surface/marker rule so unsupported selector parsing cannot discard the fallback.
+- Observe class and open-state changes as well as child-list changes; continue counting each surface once.
+
+### Testing and scope
+
+- All 12 Chromium browser tests pass, including node identity/state retention, renderer-style unmounting, overlay reuse and marker-only fallback, normal controls/navigation/errors, and untouched app-banner candidates.
+- No new promotional targets. The unknown app card remains unimplemented pending real DOM evidence.
+- Live authenticated JanitorAI testing remains unavailable; modal focus/scroll effects are not validated or changed.
+
 ## [0.2.1] - 2026-09-28
 
 ### Fixed
