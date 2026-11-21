@@ -35,19 +35,21 @@ The script does not:
 - modify network requests, subscription state, or account functionality
 - interact with adblockers
 
-## App-promotion banners
+## Plus memory banner
 
-App-banner suppression remains unimplemented in v0.2.2. The v0.2.0 CSS accidentally emitted global tag selectors that hid ordinary page content. v0.2.1 restored the Plus-only behavior from commit `b94652f`. The reported “Continue this chat in the app / Get the app” card still has no verified live DOM; no selector or suppression rule is provided for it.
+Version 0.2.3 also suppresses the reported Plus memory-upgrade banner when all three distinctive phrases appear together: “Don’t let your characters forget you,” “Your characters lose context as your chat grows,” and “Upgrade now to help your characters remember more.” It hides the innermost element containing all three phrases, preserving the banner's DOM and state. A partial copy or ordinary mention of Plus remains visible. The matching text came from a user-provided banner description; the live JanitorAI DOM structure has not been independently verified.
+
+The unrelated “Continue this chat in the app / Get the app” card remains unimplemented because its live DOM is still unverified. The script does not infer app-promotion targets from generic wording.
 
 ## Experimental diagnostic (optional, GitHub only)
 
-To help investigate the unverified app card or other unwanted UI, use the separate [EXPERIMENTAL DIAGNOSTIC userscript](https://raw.githubusercontent.com/transientclover-ui/janitorai-nag-eater/main/experimental/nag-eater-diagnostic.user.js). It provides a manual element picker and a redacted structural report for local review/copying. It does not suppress UI, upload anything, or replace stable Nag Eater v0.2.2. No Greasy Fork publication is involved.
+To help investigate the unverified app card or other unwanted UI, use the separate [EXPERIMENTAL DIAGNOSTIC userscript](https://raw.githubusercontent.com/transientclover-ui/janitorai-nag-eater/main/experimental/nag-eater-diagnostic.user.js). It provides a manual element picker and a redacted structural report for local review/copying. It does not suppress UI, upload anything, or replace stable Nag Eater v0.2.3. No Greasy Fork publication is involved.
 
 See [install, capture, privacy and limitations](docs/experimental-diagnostic.md). Review every report before sharing it through the [diagnostic issue form](https://github.com/transientclover-ui/janitorai-nag-eater/issues/new?template=diagnostic.yml). Participation is optional; missing captures are not a blocker for stable Nag Eater.
 
 ## Verification and limitations
 
-The complete 12-test Chromium suite covers ordinary UI and errors, chat input/buttons and navigation, early Plus CSS, delayed/recreated surfaces, unique counts, attribute-only opening, reversible overlay reuse, and the marker-only fallback with the `:has()` rule removed. Node-identity and DOM-mutation assertions verify that suppression retains children, unsaved input state and event listeners, and permits subsequent removal by the owning renderer. These are browser DOM lifecycle fixtures, not an authenticated React/JanitorAI integration test.
+The complete 15-test Chromium suite covers ordinary UI and errors, chat input/buttons and navigation, early Plus CSS, delayed/recreated surfaces, exact memory-banner copy and partial-copy exclusions, unique counts, attribute-only opening, reversible overlay reuse, and the marker-only fallback with the `:has()` rule removed. Node-identity and DOM-mutation assertions verify that suppression retains children, unsaved input state and event listeners, and permits subsequent removal by the owning renderer. These are browser DOM lifecycle fixtures, not an authenticated React/JanitorAI integration test.
 
 History inspection confirms that v0.2.0's global hiding regression came from malformed CSS selector-list composition, not physical DOM removal. CSS alone is not inherently safe: selectors must remain narrow and suppression must track the current target state.
 

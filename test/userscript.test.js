@@ -51,6 +51,49 @@ test('preserves legitimate containers, dialogs, and unverified app banners', asy
   await expect(page.locator('#promo')).toBeHidden();
 });
 
+test('suppresses the exact JanitorAI Plus memory upsell as one intact banner', async ({page}) => {
+  await page.setContent(`${ui}
+    <aside id="memory-upsell">
+      <h2>Don’t let your characters forget you.</h2>
+      <p>Your characters lose context as your chat grows.</p>
+      <a href="#upgrade">Upgrade now to help your characters remember more</a>
+    </aside>`);
+  await install(page);
+  await expect(page.locator('#memory-upsell')).toBeHidden();
+  await expect(page.locator('#memory-upsell h2')).toHaveText('Don’t let your characters forget you.');
+  await expect(page.locator('#memory-upsell a')).toHaveAttribute('href', '#upgrade');
+  await expect(page.locator('#chat')).toBeVisible();
+  await expect(page.locator('#ordinary')).toBeVisible();
+});
+
+test('does not hide chat that mentions Plus or only part of the memory banner copy', async ({page}) => {
+  await page.setContent(`${ui}
+    <div id="mentioned">Plus can remember this normal message.</div>
+    <div id="partial">
+      <h2>Don’t let your characters forget you.</h2>
+      <p>Your characters lose context as your chat grows.</p>
+      <a href="#help">Read about memory</a>
+    </div>`);
+  await install(page);
+  await expect(page.locator('#mentioned')).toBeVisible();
+  await expect(page.locator('#partial')).toBeVisible();
+  await assertUsable(page);
+});
+
+test('releases a memory banner marker when its copy changes or it is removed', async ({page}) => {
+  await page.setContent(`<aside id="memory-upsell">
+    <h2>Don’t let your characters forget you.</h2>
+    <p>Your characters lose context as your chat grows.</p>
+    <a href="#upgrade">Upgrade now to help your characters remember more</a>
+  </aside>`);
+  await install(page);
+  const banner = page.locator('#memory-upsell');
+  await expect(banner).toHaveAttribute('data-jne-plus-memory-banner', '');
+  await banner.locator('a').evaluate(el => { el.textContent = 'Read about memory'; });
+  await expect(banner).toBeVisible();
+  await expect(banner).not.toHaveAttribute('data-jne-plus-memory-banner');
+});
+
 test('early CSS hides only confirmed Plus surfaces before observer runs', async ({page}) => {
   await page.setContent(ui);
   await install(page);
