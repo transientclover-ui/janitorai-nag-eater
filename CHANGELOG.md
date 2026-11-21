@@ -2,17 +2,6 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.2.3] - 2026-11-20
-
-### Added
-
-- Suppress the JanitorAI Plus memory-upgrade banner when all three distinctive user-reported phrases appear together. The filter hides only the innermost matching container and releases its marker when the copy changes.
-- Add Chromium regression coverage for the banner, ordinary Plus mentions, partial copy, and marker release.
-
-### Scope
-
-- The supplied banner copy is targeted; its live DOM has not been independently verified. The unrelated app-promotion card remains unimplemented.
-
 ## [0.2.2] - 2026-09-28
 
 ### Fixed
