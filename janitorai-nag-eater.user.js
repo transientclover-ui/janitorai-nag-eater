@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         JanitorAI Nag Eater
 // @namespace    https://github.com/transientclover-ui/janitorai-nag-eater
-// @version      0.2.3
-// @description  Hides JanitorAI Plus subscription promotional popups.
+// @version      0.2.4
+// @description  Hides JanitorAI Plus promotional popups and the memory-upgrade banner.
 // @author       JanitorAI Nag Eater contributors
 // @license      MIT
 // @match        https://janitorai.com/*
@@ -15,19 +15,14 @@
 
   const PLUS_SURFACE_SELECTOR =
     '[data-modal-open="true"][class*="_plusSurface_"]';
+  // Confirmed by the redacted DOM capture: this semantic class uniquely
+  // identifies the Plus memory-upgrade banner.
+  const PLUS_MEMORY_BANNER_SELECTOR = 'div.hp-plus-banner';
   const MODAL_OVERLAY_SELECTOR = '[class*="_modalOverlay_"]';
   const SUPPRESSED_ATTRIBUTE = 'data-jne-plus-promotion';
-  const MEMORY_BANNER_ATTRIBUTE = 'data-jne-plus-memory-banner';
-  const MEMORY_BANNER_COPY = [
-    "don't let your characters forget you",
-    'your characters lose context as your chat grows',
-    'upgrade now to help your characters remember more',
-  ];
-  const suppressedSurfaces = new WeakSet();
-  const countedMemoryBanners = new WeakSet();
+  const countedPromotions = new WeakSet();
   let suppressedCount = 0;
   const markedOverlays = new Set();
-  const markedMemoryBanners = new Set();
 
   const style = document.createElement('style');
   // Keep :has() separate: unsupported selectors must not invalidate the
@@ -35,7 +30,7 @@
   style.textContent = `
     ${PLUS_SURFACE_SELECTOR},
     ${MODAL_OVERLAY_SELECTOR}[${SUPPRESSED_ATTRIBUTE}],
-    [${MEMORY_BANNER_ATTRIBUTE}] {
+    ${PLUS_MEMORY_BANNER_SELECTOR} {
       display: none !important;
     }
     ${MODAL_OVERLAY_SELECTOR}:has(${PLUS_SURFACE_SELECTOR}) {
@@ -44,30 +39,11 @@
   `;
   (document.head || document.documentElement).append(style);
 
-  function hasMemoryBannerCopy(element) {
-    const text = (element.textContent || '')
-      .toLowerCase()
-      .replace(/[’‘]/g, "'")
-      .replace(/\s+/g, ' ')
-      .trim();
-    return MEMORY_BANNER_COPY.every(phrase => text.includes(phrase));
-  }
-
-  function findMemoryBanners() {
-    const matches = [...document.querySelectorAll('body *')]
-      .filter(hasMemoryBannerCopy);
-    // Keep only the innermost matching containers. A page or chat root can
-    // contain the banner copy too, but its own card is the suppression unit.
-    return matches.filter(element =>
-      !matches.some(other => other !== element && element.contains(other)),
-    );
-  }
-
   function reconcile() {
     const activeOverlays = new Set();
     for (const surface of document.querySelectorAll(PLUS_SURFACE_SELECTOR)) {
-      if (!suppressedSurfaces.has(surface)) {
-        suppressedSurfaces.add(surface);
+      if (!countedPromotions.has(surface)) {
+        countedPromotions.add(surface);
         suppressedCount += 1;
       }
       // Match the CSS ancestry rule, including nested overlays.
@@ -76,26 +52,13 @@
           activeOverlays.add(parent);
         }
       }
+    }
 
-    const activeMemoryBanners = new Set(findMemoryBanners());
-    for (const banner of activeMemoryBanners) {
-      if (!countedMemoryBanners.has(banner)) {
-        countedMemoryBanners.add(banner);
+    for (const banner of document.querySelectorAll(PLUS_MEMORY_BANNER_SELECTOR)) {
+      if (!countedPromotions.has(banner)) {
+        countedPromotions.add(banner);
         suppressedCount += 1;
       }
-    }
-    for (const banner of markedMemoryBanners) {
-      if (!activeMemoryBanners.has(banner)) {
-        banner.removeAttribute(MEMORY_BANNER_ATTRIBUTE);
-        markedMemoryBanners.delete(banner);
-      }
-    }
-    for (const banner of activeMemoryBanners) {
-      if (!banner.hasAttribute(MEMORY_BANNER_ATTRIBUTE)) {
-        banner.setAttribute(MEMORY_BANNER_ATTRIBUTE, '');
-      }
-      markedMemoryBanners.add(banner);
-    }
     }
 
     // React may close, move, or replace the promotion and reuse its overlay.
@@ -129,7 +92,6 @@
   observer.observe(document.documentElement, {
     childList: true,
     subtree: true,
-    characterData: true,
     attributes: true,
     attributeFilter: ['class', 'data-modal-open'],
   });
