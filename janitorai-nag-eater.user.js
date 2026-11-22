@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         JanitorAI Nag Eater
 // @namespace    https://github.com/transientclover-ui/janitorai-nag-eater
-// @version      0.2.4
-// @description  Hides JanitorAI Plus promotional popups and the memory-upgrade banner.
+// @version      0.2.5
+// @description  Hides JanitorAI Plus and confirmed app-promotion banners.
 // @author       JanitorAI Nag Eater contributors
 // @license      MIT
 // @match        https://janitorai.com/*
@@ -15,84 +15,170 @@
 
   const PLUS_SURFACE_SELECTOR =
     '[data-modal-open="true"][class*="_plusSurface_"]';
-  // Confirmed by the redacted DOM capture: this semantic class uniquely
-  // identifies the Plus memory-upgrade banner.
+  // The supplied redacted DOM capture marked this semantic selector unique
+  // and stable for the Plus memory-upgrade banner.
   const PLUS_MEMORY_BANNER_SELECTOR = 'div.hp-plus-banner';
   const MODAL_OVERLAY_SELECTOR = '[class*="_modalOverlay_"]';
+  const APP_BANNER_CONTAINER_SELECTOR =
+    '[class*="_appPromotionContainer_"]' +
+    ', [class*="bentoAppPromotionBanner_"]' +
+    ', [class*="bentoAppBanner_"]';
+  const APP_BANNER_TEXT_SELECTOR =
+    'h1, h2, h3, p, div, span, a, button, li';
   const SUPPRESSED_ATTRIBUTE = 'data-jne-plus-promotion';
-  const countedPromotions = new WeakSet();
+  const APP_PROMOTION_SUPPRESSED_ATTRIBUTE =
+    'data-jne-app-promotion-banner';
+  const suppressedSurfaces = new WeakSet();
+  const suppressedAppBanners = new WeakSet();
   let suppressedCount = 0;
-  const markedOverlays = new Set();
+  let suppressedAppBannerCount = 0;
 
   const style = document.createElement('style');
-  // Keep :has() separate: unsupported selectors must not invalidate the
-  // surface rule or the observer fallback.
   style.textContent = `
     ${PLUS_SURFACE_SELECTOR},
-    ${MODAL_OVERLAY_SELECTOR}[${SUPPRESSED_ATTRIBUTE}],
-    ${PLUS_MEMORY_BANNER_SELECTOR} {
+    ${PLUS_MEMORY_BANNER_SELECTOR},
+    [${SUPPRESSED_ATTRIBUTE}],
+    [${APP_PROMOTION_SUPPRESSED_ATTRIBUTE}] {
       display: none !important;
     }
+
     ${MODAL_OVERLAY_SELECTOR}:has(${PLUS_SURFACE_SELECTOR}) {
       display: none !important;
     }
   `;
   (document.head || document.documentElement).append(style);
 
-  function reconcile() {
-    const activeOverlays = new Set();
-    for (const surface of document.querySelectorAll(PLUS_SURFACE_SELECTOR)) {
-      if (!countedPromotions.has(surface)) {
-        countedPromotions.add(surface);
-        suppressedCount += 1;
-      }
-      // Match the CSS ancestry rule, including nested overlays.
-      for (let parent = surface.parentElement; parent; parent = parent.parentElement) {
-        if (parent.matches(MODAL_OVERLAY_SELECTOR)) {
-          activeOverlays.add(parent);
-        }
+  function suppressSurface(surface) {
+    if (!suppressedSurfaces.has(surface)) {
+      suppressedSurfaces.add(surface);
+      suppressedCount += 1;
+    }
+
+    const overlay = surface.closest(MODAL_OVERLAY_SELECTOR);
+    if (!overlay) {
+      return;
+    }
+
+    overlay.setAttribute(SUPPRESSED_ATTRIBUTE, '');
+    overlay.setAttribute('aria-hidden', 'true');
+    overlay.inert = true;
+  }
+
+  function isAppPromotionBanner(container) {
+    if (!(container instanceof Element)) {
+      return false;
+    }
+
+    const textNodes = [];
+    const walker = document.createTreeWalker(
+      container,
+      NodeFilter.SHOW_TEXT,
+      null,
+      false,
+    );
+    let node;
+    while ((node = walker.nextNode())) {
+      if (node.parentElement && node.parentElement.matches(APP_BANNER_TEXT_SELECTOR)) {
+        textNodes.push(node);
       }
     }
 
-    for (const banner of document.querySelectorAll(PLUS_MEMORY_BANNER_SELECTOR)) {
-      if (!countedPromotions.has(banner)) {
-        countedPromotions.add(banner);
-        suppressedCount += 1;
+    if (textNodes.length === 0) {
+      return false;
+    }
+
+    const text = textNodes
+      .map((n) => n.textContent.trim())
+      .filter((s) => s.length > 0)
+      .join(' ');
+
+    if (text.length === 0) {
+      return false;
+    }
+
+    const lowered = text.toLowerCase();
+    const hasApplicationCta = lowered.includes('get the app') ||
+      lowered.includes('download the app') ||
+      lowered.includes('open in app') ||
+      lowered.includes('continue in the app') ||
+      lowered.includes('pick up right where you are') ||
+      lowered.includes('continue this chat in the app');
+
+    if (!hasApplicationCta) {
+      return false;
+    }
+
+    const hasAppStoreLanguage = lowered.includes('app store') ||
+      lowered.includes('google play') ||
+      lowered.includes('ios') ||
+      lowered.includes('android');
+
+    const buttons = container.querySelectorAll(
+      APP_BANNER_TEXT_SELECTOR + ':is([aria-label*="app" i], [role="button"])',
+    );
+
+    return hasApplicationCta && (
+      hasAppStoreLanguage ||
+      buttons.length > 0 ||
+      textNodes.length <= 3
+    );
+  }
+
+  function suppressAppBanner(container) {
+    if (suppressedAppBanners.has(container)) {
+      return;
+    }
+
+    suppressedAppBanners.add(container);
+    suppressedAppBannerCount += 1;
+    container.setAttribute(APP_PROMOTION_SUPPRESSED_ATTRIBUTE, '');
+    container.inert = true;
+  }
+
+  function scan(root) {
+    if (!(root instanceof Element)) {
+      return;
+    }
+
+    if (root.matches(APP_BANNER_CONTAINER_SELECTOR) && isAppPromotionBanner(root)) {
+      suppressAppBanner(root);
+    }
+
+    for (const container of root.querySelectorAll(APP_BANNER_CONTAINER_SELECTOR)) {
+      if (isAppPromotionBanner(container)) {
+        suppressAppBanner(container);
       }
     }
 
-    // React may close, move, or replace the promotion and reuse its overlay.
-    // Only our marker is owned by us; leave nodes, aria-hidden and inert alone.
-    for (const overlay of markedOverlays) {
-      if (!activeOverlays.has(overlay)) {
-        overlay.removeAttribute(SUPPRESSED_ATTRIBUTE);
-        markedOverlays.delete(overlay);
-      }
+    if (root.matches(PLUS_SURFACE_SELECTOR)) {
+      suppressSurface(root);
     }
-    for (const overlay of activeOverlays) {
-      if (!overlay.hasAttribute(SUPPRESSED_ATTRIBUTE)) {
-        overlay.setAttribute(SUPPRESSED_ATTRIBUTE, '');
-      }
-      markedOverlays.add(overlay);
+
+    for (const surface of root.querySelectorAll(PLUS_SURFACE_SELECTOR)) {
+      suppressSurface(surface);
     }
   }
 
   GM_registerMenuCommand('Show suppressed promotion count', () => {
-    const noun = suppressedCount === 1 ? 'element' : 'elements';
+    const surfaceNoun = suppressedCount === 1 ? 'element' : 'elements';
+    const bannerNoun = suppressedAppBannerCount === 1 ? 'element' : 'elements';
     alert(
-      `JanitorAI Nag Eater suppressed ${suppressedCount} promotional ${noun} on this page.`,
+      `JanitorAI Nag Eater suppressed ${suppressedCount} promotional Plus ${surfaceNoun} and ${suppressedAppBannerCount} app-promotion banner ${bannerNoun} on this page.`,
     );
   });
 
-  reconcile();
+  scan(document.documentElement);
 
-  // One reconciliation per mutation batch. Our marker is not observed, so
-  // suppression cannot trigger an observer feedback loop.
-  const observer = new MutationObserver(reconcile);
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      for (const node of mutation.addedNodes) {
+        scan(node);
+      }
+    }
+  });
+
   observer.observe(document.documentElement, {
     childList: true,
     subtree: true,
-    attributes: true,
-    attributeFilter: ['class', 'data-modal-open'],
   });
 })();
